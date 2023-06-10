@@ -1,0 +1,6 @@
+Checks: '-*,bugprone-*,llvm-*'
+CheckOptions:
+    - key: bugprone-argument-comment.StrictMode
+      value: 1
+FormatStyle: 'file'
+
