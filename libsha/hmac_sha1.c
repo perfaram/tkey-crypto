@@ -29,7 +29,11 @@
  */
 
 #include <hmac_sha1.h>
+#ifdef __riscv
 #include <lib.h>
+#else
+#include <string.h>
+#endif
 
 void hmac_sha1_init(hmac_sha1_ctx *ctx, const void *key, size_t keylen)
 {
@@ -38,7 +42,7 @@ void hmac_sha1_init(hmac_sha1_ctx *ctx, const void *key, size_t keylen)
 	/* prepare key */
 	memset(keybuf, 0, sizeof keybuf);
 	if (keylen > sizeof keybuf)
-		sha1(keybuf, key, keylen);
+		sha1_complete(keybuf, key, keylen);
 	else
 		memcpy(keybuf, key, keylen);
 
@@ -46,13 +50,13 @@ void hmac_sha1_init(hmac_sha1_ctx *ctx, const void *key, size_t keylen)
 	for (uint32_t i = 0; i < sizeof pad; ++i)
 		pad[i] = 0x36 ^ keybuf[i];
 	sha1_init(&ctx->ictx);
-	sha1_update(pad, sizeof pad, &ctx->ictx);
+	sha1_update(&ctx->ictx, pad, sizeof pad);
 
 	/* output pad */
 	for (uint32_t i = 0; i < sizeof pad; ++i)
 		pad[i] = 0x5c ^ keybuf[i];
 	sha1_init(&ctx->octx);
-	sha1_update(pad, sizeof pad, &ctx->octx);
+	sha1_update(&ctx->octx, pad, sizeof pad);
 
 	/* hide the evidence */
 	memset(keybuf, 0, sizeof keybuf);
@@ -62,21 +66,21 @@ void hmac_sha1_init(hmac_sha1_ctx *ctx, const void *key, size_t keylen)
 void hmac_sha1_update(hmac_sha1_ctx *ctx, const void *buf, size_t len)
 {
 
-	sha1_update(buf, len, &ctx->ictx);
+	sha1_update(&ctx->ictx, buf, len);
 }
 
 void hmac_sha1_final(hmac_sha1_ctx *ctx, uint8_t *mac)
 {
 	uint8_t digest[SHA1_DIGEST_LEN];
 
-	sha1_final(digest, &ctx->ictx);
-	sha1_update(digest, sizeof digest, &ctx->octx);
-	sha1_final(mac, &ctx->octx);
+	sha1_final(&ctx->ictx, digest);
+	sha1_update(&ctx->octx, digest, sizeof digest);
+	sha1_final(&ctx->octx, mac);
 	memset(ctx, 0, sizeof *ctx);
 }
 
-void hmac_sha1_complete(const void *key, size_t keylen, const void *buf,
-			size_t len, uint8_t *mac)
+void hmac_sha1_complete(uint8_t *mac, const void *key, size_t keylen,
+			const void *buf, size_t len)
 {
 	hmac_sha1_ctx ctx;
 

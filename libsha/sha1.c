@@ -1,250 +1,307 @@
-/*
- ---------------------------------------------------------------------------
- Copyright (c) 2002, Dr Brian Gladman, Worcester, UK.   All rights reserved.
+/*-
+ * Copyright (c) 2012 The University of Oslo
+ * Copyright (c) 2012-2016 Dag-Erling Smørgrav
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. The name of the author may not be used to endorse or promote
+ *    products derived from this software without specific prior written
+ *    permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
 
- LICENSE TERMS
-
- The free distribution and use of this software in both source and binary
- form is allowed (with or without changes) provided that:
-
-   1. distributions of this source code include the above copyright
-      notice, this list of conditions and the following disclaimer;
-
-   2. distributions in binary form include the above copyright
-      notice, this list of conditions and the following disclaimer
-      in the documentation and/or other associated materials;
-
-   3. the copyright holder's name is not used to endorse products
-      built using this software without specific written permission.
-
- ALTERNATIVELY, provided that this notice is retained in full, this product
- may be distributed under the terms of the GNU General Public License (GPL),
- in which case the provisions of the GPL apply INSTEAD OF those given above.
-
- DISCLAIMER
-
- This software is provided 'as is' with no explicit or implied warranties
- in respect of its properties, including, but not limited to, correctness
- and/or fitness for purpose.
- ---------------------------------------------------------------------------
- Issue Date: 01/08/2005
-
- This is a byte oriented version of SHA1 that operates on arrays of bytes
- stored in memory.
-*/
-
-#include <lib.h> /* for memcpy() etc.        */
+#ifdef __riscv
+#include <lib.h>
+#include <tklib/limits.h>
+#else
+#include <string.h>
+#endif
+#include <errno_compat.h>
 #include <sha1.h>
-#include <types.h>
 
-#define rotl32(x, n) (((x) << n) | ((x) >> (32 - n)))
-#define rotr32(x, n) (((x) >> n) | ((x) << (32 - n)))
-
-#define bswap_32(x)                                                            \
-	((rotr32((x), 24) & 0x00ff00ff) | (rotr32((x), 8) & 0xff00ff00))
-
-#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
-#define bsw_32(p, n)                                                           \
+#define CRYB_ROR(N)                                                            \
+	static inline uint##N##_t ror##N(uint##N##_t i, int n)                 \
 	{                                                                      \
-		int _i = (n);                                                  \
-		while (_i--)                                                   \
-			((uint32_t *)p)[_i] = bswap_32(((uint32_t *)p)[_i]);   \
-	}
-#else
-#define bsw_32(p, n)
-#endif
-
-#define SHA1_MASK (SHA1_BLOCK_LEN - 1)
-
-#if 0
-
-#define ch(x, y, z) (((x) & (y)) ^ (~(x) & (z)))
-#define parity(x, y, z) ((x) ^ (y) ^ (z))
-#define maj(x, y, z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
-
-#else /* Discovered by Rich Schroeppel and Colin Plumb   */
-
-#define ch(x, y, z) ((z) ^ ((x) & ((y) ^ (z))))
-#define parity(x, y, z) ((x) ^ (y) ^ (z))
-#define maj(x, y, z) (((x) & (y)) | ((z) & ((x) ^ (y))))
-
-#endif
-
-/* Compile 64 bytes of hash data into SHA1 context. Note    */
-/* that this routine assumes that the byte order in the     */
-/* ctx->wbuf[] at this point is in such an order that low   */
-/* address bytes in the ORIGINAL byte stream will go in     */
-/* this buffer to the high end of 32-bit words on BOTH big  */
-/* and little endian systems                                */
-
-#ifdef ARRAY
-#define q(v, n) v[n]
-#else
-#define q(v, n) v##n
-#endif
-
-#define one_cycle(v, a, b, c, d, e, f, k, h)                                   \
-	q(v, e) += rotr32(q(v, a), 27) + f(q(v, b), q(v, c), q(v, d)) + k + h; \
-	q(v, b) = rotr32(q(v, b), 2)
-
-#define five_cycle(v, f, k, i)                                                 \
-	one_cycle(v, 0, 1, 2, 3, 4, f, k, hf(i));                              \
-	one_cycle(v, 4, 0, 1, 2, 3, f, k, hf(i + 1));                          \
-	one_cycle(v, 3, 4, 0, 1, 2, f, k, hf(i + 2));                          \
-	one_cycle(v, 2, 3, 4, 0, 1, f, k, hf(i + 3));                          \
-	one_cycle(v, 1, 2, 3, 4, 0, f, k, hf(i + 4))
-
-static void sha1_compile(sha1_ctx ctx[1])
-{
-	uint32_t *w = ctx->wbuf;
-
-#ifdef ARRAY
-	uint32_t v[5];
-	memcpy(v, ctx->hash, 5 * sizeof(uint32_t));
-#else
-	uint32_t v0, v1, v2, v3, v4;
-	v0 = ctx->hash[0];
-	v1 = ctx->hash[1];
-	v2 = ctx->hash[2];
-	v3 = ctx->hash[3];
-	v4 = ctx->hash[4];
-#endif
-
-#define hf(i) w[i]
-
-	five_cycle(v, ch, 0x5a827999, 0);
-	five_cycle(v, ch, 0x5a827999, 5);
-	five_cycle(v, ch, 0x5a827999, 10);
-	one_cycle(v, 0, 1, 2, 3, 4, ch, 0x5a827999, hf(15));
-
-#undef hf
-#define hf(i)                                                                  \
-	(w[(i)&15] = rotl32(w[((i) + 13) & 15] ^ w[((i) + 8) & 15] ^           \
-				w[((i) + 2) & 15] ^ w[(i)&15],                 \
-			    1))
-
-	one_cycle(v, 4, 0, 1, 2, 3, ch, 0x5a827999, hf(16));
-	one_cycle(v, 3, 4, 0, 1, 2, ch, 0x5a827999, hf(17));
-	one_cycle(v, 2, 3, 4, 0, 1, ch, 0x5a827999, hf(18));
-	one_cycle(v, 1, 2, 3, 4, 0, ch, 0x5a827999, hf(19));
-
-	five_cycle(v, parity, 0x6ed9eba1, 20);
-	five_cycle(v, parity, 0x6ed9eba1, 25);
-	five_cycle(v, parity, 0x6ed9eba1, 30);
-	five_cycle(v, parity, 0x6ed9eba1, 35);
-
-	five_cycle(v, maj, 0x8f1bbcdc, 40);
-	five_cycle(v, maj, 0x8f1bbcdc, 45);
-	five_cycle(v, maj, 0x8f1bbcdc, 50);
-	five_cycle(v, maj, 0x8f1bbcdc, 55);
-
-	five_cycle(v, parity, 0xca62c1d6, 60);
-	five_cycle(v, parity, 0xca62c1d6, 65);
-	five_cycle(v, parity, 0xca62c1d6, 70);
-	five_cycle(v, parity, 0xca62c1d6, 75);
-
-#ifdef ARRAY
-	ctx->hash[0] += v[0];
-	ctx->hash[1] += v[1];
-	ctx->hash[2] += v[2];
-	ctx->hash[3] += v[3];
-	ctx->hash[4] += v[4];
-#else
-	ctx->hash[0] += v0;
-	ctx->hash[1] += v1;
-	ctx->hash[2] += v2;
-	ctx->hash[3] += v3;
-	ctx->hash[4] += v4;
-#endif
-}
-
-void sha1_init(sha1_ctx ctx[1])
-{
-	ctx->count[0] = ctx->count[1] = 0;
-	ctx->hash[0] = 0x67452301;
-	ctx->hash[1] = 0xefcdab89;
-	ctx->hash[2] = 0x98badcfe;
-	ctx->hash[3] = 0x10325476;
-	ctx->hash[4] = 0xc3d2e1f0;
-}
-
-/* SHA1 hash data in an array of bytes into hash buffer and */
-/* call the hash_compile function as required.              */
-
-void sha1_update(const uint8_t data[], size_t len, sha1_ctx ctx[1])
-{
-	uint32_t pos = (uint32_t)(ctx->count[0] & SHA1_MASK),
-		 space = SHA1_BLOCK_LEN - pos;
-	const uint8_t *sp = data;
-
-	if ((ctx->count[0] += len) < len)
-		++(ctx->count[1]);
-
-	while (len >= space) /* tranfer whole blocks if possible  */
-	{
-		memcpy(((uint8_t *)ctx->wbuf) + pos, sp, space);
-		sp += space;
-		len -= space;
-		space = SHA1_BLOCK_LEN;
-		pos = 0;
-		bsw_32(ctx->wbuf, SHA1_BLOCK_LEN >> 2);
-		sha1_compile(ctx);
+		return (i << (-n & ((N)-1)) | i >> (n & ((N)-1)));             \
 	}
 
-	memcpy(((uint8_t *)ctx->wbuf) + pos, sp, len);
+#define CRYB_ROL(N)                                                            \
+	static inline uint##N##_t rol##N(uint##N##_t i, int n)                 \
+	{                                                                      \
+		return (i << (n & ((N)-1)) | i >> (-n & ((N)-1)));             \
+	}
+
+CRYB_ROL(32);
+
+static inline uint32_t be32dec(const void *p)
+{
+	return ((uint32_t)((const uint8_t *)p)[3] |
+		(uint32_t)((const uint8_t *)p)[2] << 8 |
+		(uint32_t)((const uint8_t *)p)[1] << 16 |
+		(uint32_t)((const uint8_t *)p)[0] << 24);
 }
 
-/* SHA1 final padding and digest calculation  */
-
-void sha1_final(uint8_t hval[], sha1_ctx ctx[1])
+static inline void be32decv(uint32_t *u32, const void *p, size_t n)
 {
-	uint32_t i = (uint32_t)(ctx->count[0] & SHA1_MASK);
-
-	/* put bytes in the buffer in an order in which references to   */
-	/* 32-bit words will put bytes with lower addresses into the    */
-	/* top of 32 bit words on BOTH big and little endian machines   */
-	bsw_32(ctx->wbuf, (i + 3) >> 2);
-
-	/* we now need to mask valid bytes and add the padding which is */
-	/* a single 1 bit and as many zero bits as necessary. Note that */
-	/* we can always add the first padding byte here because the    */
-	/* buffer always has at least one empty slot                    */
-	ctx->wbuf[i >> 2] &= 0xffffff80 << 8 * (~i & 3);
-	ctx->wbuf[i >> 2] |= 0x00000080 << 8 * (~i & 3);
-
-	/* we need 9 or more empty positions, one for the padding byte  */
-	/* (above) and eight for the length count. If there is not      */
-	/* enough space, pad and empty the buffer                       */
-	if (i > SHA1_BLOCK_LEN - 9) {
-		if (i < 60)
-			ctx->wbuf[15] = 0;
-		sha1_compile(ctx);
-		i = 0;
-	} else /* compute a word index for the empty buffer positions  */
-		i = (i >> 2) + 1;
-
-	while (i < 14) /* and zero pad all but last two positions        */
-		ctx->wbuf[i++] = 0;
-
-	/* the following 32-bit length fields are assembled in the      */
-	/* wrong byte order on little endian machines but this is       */
-	/* corrected later since they are only ever used as 32-bit      */
-	/* word values.                                                 */
-	ctx->wbuf[14] = (ctx->count[1] << 3) | (ctx->count[0] >> 29);
-	ctx->wbuf[15] = ctx->count[0] << 3;
-	sha1_compile(ctx);
-
-	/* extract the hash value as bytes in case the hash buffer is   */
-	/* misaligned for 32-bit words                                  */
-	for (i = 0; i < SHA1_DIGEST_LEN; ++i)
-		hval[i] = (uint8_t)(ctx->hash[i >> 2] >> (8 * (~i & 3)));
+	for (const uint8_t *u8 = p; n--; u8 += sizeof *u32, u32++)
+		*u32 = be32dec(u8);
 }
 
-void sha1(uint8_t hval[], const uint8_t data[], size_t len)
+static inline void be32enc(void *p, uint32_t u32)
 {
-	sha1_ctx cx[1];
+	((uint8_t *)p)[3] = u32 & 0xff;
+	((uint8_t *)p)[2] = (u32 >> 8) & 0xff;
+	((uint8_t *)p)[1] = (u32 >> 16) & 0xff;
+	((uint8_t *)p)[0] = (u32 >> 24) & 0xff;
+}
 
-	sha1_init(cx);
-	sha1_update(data, len, cx);
-	sha1_final(hval, cx);
+static inline void be32encv(void *p, const uint32_t *u32, size_t n)
+{
+	for (uint8_t *u8 = p; n--; u8 += sizeof *u32, u32++)
+		be32enc(u8, *u32);
+}
+
+static inline void be64enc(void *p, uint64_t u64)
+{
+	((uint8_t *)p)[7] = u64 & 0xff;
+	((uint8_t *)p)[6] = (u64 >> 8) & 0xff;
+	((uint8_t *)p)[5] = (u64 >> 16) & 0xff;
+	((uint8_t *)p)[4] = (u64 >> 24) & 0xff;
+	((uint8_t *)p)[3] = (u64 >> 32) & 0xff;
+	((uint8_t *)p)[2] = (u64 >> 40) & 0xff;
+	((uint8_t *)p)[1] = (u64 >> 48) & 0xff;
+	((uint8_t *)p)[0] = (u64 >> 56) & 0xff;
+}
+
+/*
+ * Like memset(), but checks for overflow and guarantees that the buffer
+ * is overwritten even if the data will never be read.
+ *
+ * ISO/IEC 9899:2011 K.3.7.4.1
+ */
+errno_t memset_s(void *d, size_t dsz, int c, size_t n)
+{
+	volatile uint8_t *D;
+	unsigned int i;
+	uint8_t C;
+
+	if (d == NULL)
+		return (EINVAL);
+
+	if (dsz > SIZE_MAX || n > SIZE_MAX)
+		return (ERANGE);
+
+	for (D = d, C = (uint8_t)c, i = 0; i < n && i < dsz; ++i)
+		D[i] = C;
+	if (n > dsz)
+		return (EOVERFLOW);
+	return (0);
+}
+
+static uint32_t sha1_h[5] = {
+    0x67452301U, 0xefcdab89U, 0x98badcfeU, 0x10325476U, 0xc3d2e1f0U,
+};
+
+static uint32_t sha1_k[4] = {
+    0x5a827999U,
+    0x6ed9eba1U,
+    0x8f1bbcdcU,
+    0xca62c1d6U,
+};
+
+void sha1_init(sha1_ctx *ctx)
+{
+
+	memset(ctx, 0, sizeof *ctx);
+	memcpy(ctx->h, sha1_h, sizeof ctx->h);
+}
+
+#define sha1_ch(x, y, z) (((x) & (y)) ^ (~(x) & (z)))
+#define sha1_parity(x, y, z) (((x) ^ (y) ^ (z)))
+#define sha1_maj(x, y, z) ((((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z))))
+#define sha1_step(t, a, f, e, w)                                               \
+	do {                                                                   \
+		uint32_t T =                                                   \
+		    rol32(a, 5) + (f) + (e) + sha1_k[(t) / 20] + (w)[t];       \
+		(e) = d;                                                       \
+		d = c;                                                         \
+		c = rol32(b, 30);                                              \
+		b = a;                                                         \
+		(a) = T;                                                       \
+	} while (0)
+
+static void sha1_compute(sha1_ctx *ctx, const uint8_t *block)
+{
+	uint32_t w[80], a, b, c, d, e;
+	unsigned int i;
+
+	be32decv(w, block, 16);
+	for (i = 16; i < 80; ++i) {
+		w[i] = w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16];
+		w[i] = rol32(w[i], 1);
+	}
+	a = ctx->h[0];
+	b = ctx->h[1];
+	c = ctx->h[2];
+	d = ctx->h[3];
+	e = ctx->h[4];
+
+	sha1_step(0, a, sha1_ch(b, c, d), e, w);
+	sha1_step(1, a, sha1_ch(b, c, d), e, w);
+	sha1_step(2, a, sha1_ch(b, c, d), e, w);
+	sha1_step(3, a, sha1_ch(b, c, d), e, w);
+	sha1_step(4, a, sha1_ch(b, c, d), e, w);
+	sha1_step(5, a, sha1_ch(b, c, d), e, w);
+	sha1_step(6, a, sha1_ch(b, c, d), e, w);
+	sha1_step(7, a, sha1_ch(b, c, d), e, w);
+	sha1_step(8, a, sha1_ch(b, c, d), e, w);
+	sha1_step(9, a, sha1_ch(b, c, d), e, w);
+	sha1_step(10, a, sha1_ch(b, c, d), e, w);
+	sha1_step(11, a, sha1_ch(b, c, d), e, w);
+	sha1_step(12, a, sha1_ch(b, c, d), e, w);
+	sha1_step(13, a, sha1_ch(b, c, d), e, w);
+	sha1_step(14, a, sha1_ch(b, c, d), e, w);
+	sha1_step(15, a, sha1_ch(b, c, d), e, w);
+	sha1_step(16, a, sha1_ch(b, c, d), e, w);
+	sha1_step(17, a, sha1_ch(b, c, d), e, w);
+	sha1_step(18, a, sha1_ch(b, c, d), e, w);
+	sha1_step(19, a, sha1_ch(b, c, d), e, w);
+
+	sha1_step(20, a, sha1_parity(b, c, d), e, w);
+	sha1_step(21, a, sha1_parity(b, c, d), e, w);
+	sha1_step(22, a, sha1_parity(b, c, d), e, w);
+	sha1_step(23, a, sha1_parity(b, c, d), e, w);
+	sha1_step(24, a, sha1_parity(b, c, d), e, w);
+	sha1_step(25, a, sha1_parity(b, c, d), e, w);
+	sha1_step(26, a, sha1_parity(b, c, d), e, w);
+	sha1_step(27, a, sha1_parity(b, c, d), e, w);
+	sha1_step(28, a, sha1_parity(b, c, d), e, w);
+	sha1_step(29, a, sha1_parity(b, c, d), e, w);
+	sha1_step(30, a, sha1_parity(b, c, d), e, w);
+	sha1_step(31, a, sha1_parity(b, c, d), e, w);
+	sha1_step(32, a, sha1_parity(b, c, d), e, w);
+	sha1_step(33, a, sha1_parity(b, c, d), e, w);
+	sha1_step(34, a, sha1_parity(b, c, d), e, w);
+	sha1_step(35, a, sha1_parity(b, c, d), e, w);
+	sha1_step(36, a, sha1_parity(b, c, d), e, w);
+	sha1_step(37, a, sha1_parity(b, c, d), e, w);
+	sha1_step(38, a, sha1_parity(b, c, d), e, w);
+	sha1_step(39, a, sha1_parity(b, c, d), e, w);
+
+	sha1_step(40, a, sha1_maj(b, c, d), e, w);
+	sha1_step(41, a, sha1_maj(b, c, d), e, w);
+	sha1_step(42, a, sha1_maj(b, c, d), e, w);
+	sha1_step(43, a, sha1_maj(b, c, d), e, w);
+	sha1_step(44, a, sha1_maj(b, c, d), e, w);
+	sha1_step(45, a, sha1_maj(b, c, d), e, w);
+	sha1_step(46, a, sha1_maj(b, c, d), e, w);
+	sha1_step(47, a, sha1_maj(b, c, d), e, w);
+	sha1_step(48, a, sha1_maj(b, c, d), e, w);
+	sha1_step(49, a, sha1_maj(b, c, d), e, w);
+	sha1_step(50, a, sha1_maj(b, c, d), e, w);
+	sha1_step(51, a, sha1_maj(b, c, d), e, w);
+	sha1_step(52, a, sha1_maj(b, c, d), e, w);
+	sha1_step(53, a, sha1_maj(b, c, d), e, w);
+	sha1_step(54, a, sha1_maj(b, c, d), e, w);
+	sha1_step(55, a, sha1_maj(b, c, d), e, w);
+	sha1_step(56, a, sha1_maj(b, c, d), e, w);
+	sha1_step(57, a, sha1_maj(b, c, d), e, w);
+	sha1_step(58, a, sha1_maj(b, c, d), e, w);
+	sha1_step(59, a, sha1_maj(b, c, d), e, w);
+
+	sha1_step(60, a, sha1_parity(b, c, d), e, w);
+	sha1_step(61, a, sha1_parity(b, c, d), e, w);
+	sha1_step(62, a, sha1_parity(b, c, d), e, w);
+	sha1_step(63, a, sha1_parity(b, c, d), e, w);
+	sha1_step(64, a, sha1_parity(b, c, d), e, w);
+	sha1_step(65, a, sha1_parity(b, c, d), e, w);
+	sha1_step(66, a, sha1_parity(b, c, d), e, w);
+	sha1_step(67, a, sha1_parity(b, c, d), e, w);
+	sha1_step(68, a, sha1_parity(b, c, d), e, w);
+	sha1_step(69, a, sha1_parity(b, c, d), e, w);
+	sha1_step(70, a, sha1_parity(b, c, d), e, w);
+	sha1_step(71, a, sha1_parity(b, c, d), e, w);
+	sha1_step(72, a, sha1_parity(b, c, d), e, w);
+	sha1_step(73, a, sha1_parity(b, c, d), e, w);
+	sha1_step(74, a, sha1_parity(b, c, d), e, w);
+	sha1_step(75, a, sha1_parity(b, c, d), e, w);
+	sha1_step(76, a, sha1_parity(b, c, d), e, w);
+	sha1_step(77, a, sha1_parity(b, c, d), e, w);
+	sha1_step(78, a, sha1_parity(b, c, d), e, w);
+	sha1_step(79, a, sha1_parity(b, c, d), e, w);
+
+	ctx->h[0] += a;
+	ctx->h[1] += b;
+	ctx->h[2] += c;
+	ctx->h[3] += d;
+	ctx->h[4] += e;
+}
+
+void sha1_update(sha1_ctx *ctx, const uint8_t buf[], size_t len)
+{
+	size_t copylen;
+
+	while (len) {
+		if (ctx->blocklen > 0 || len < sizeof ctx->block) {
+			copylen = sizeof ctx->block - ctx->blocklen;
+			if (copylen > len)
+				copylen = len;
+			memcpy(ctx->block + ctx->blocklen, buf, copylen);
+			ctx->blocklen += copylen;
+			if (ctx->blocklen == sizeof ctx->block) {
+				sha1_compute(ctx, ctx->block);
+				ctx->blocklen = 0;
+			}
+		} else {
+			copylen = sizeof ctx->block;
+			sha1_compute(ctx, buf);
+		}
+		ctx->bitlen += copylen * 8;
+		buf += copylen;
+		len -= copylen;
+	}
+}
+
+void sha1_final(sha1_ctx *ctx, uint8_t *digest)
+{
+
+	ctx->block[ctx->blocklen++] = 0x80;
+	memset(ctx->block + ctx->blocklen, 0,
+	       sizeof ctx->block - ctx->blocklen);
+	if (ctx->blocklen > 56) {
+		sha1_compute(ctx, ctx->block);
+		ctx->blocklen = 0;
+		memset(ctx->block, 0, sizeof ctx->block);
+	}
+	be64enc(ctx->block + 56, ctx->bitlen);
+	sha1_compute(ctx, ctx->block);
+	be32encv(digest, ctx->h, 5);
+	memset_s(ctx, 0, sizeof *ctx, sizeof *ctx);
+}
+
+void sha1_complete(uint8_t digest[], const uint8_t buf[], size_t len)
+{
+	sha1_ctx ctx;
+
+	sha1_init(&ctx);
+	sha1_update(&ctx, buf, len);
+	sha1_final(&ctx, digest);
 }

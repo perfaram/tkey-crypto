@@ -2,9 +2,9 @@
 Only contains SHA1 & HMAC-SHA1 – for now. 
 
 - Common RV32 arithmetic functions: `libarithmetic`.
-  - (replace `libgcc`, extracted from gcc 12)
+  - replace `libgcc`, extracted from gcc 12
 - SHA1 & HMAC-SHA1: `libsha`.
-  - see copyright headers. 
+  - extracted from the [cryb-to](https://github.com/cryb-to/cryb-to) project
 
 ## Licenses and SPDX tags
 
