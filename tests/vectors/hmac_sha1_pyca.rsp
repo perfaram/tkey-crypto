@@ -1,0 +1,65 @@
+# 3. Test Cases for HMAC-SHA-1
+
+Len = 0
+Key = 00
+Msg = 00
+MD = fbdb1d1b18aa6c08324b7d64b71fb76370690e1d
+
+Len = 272
+Name = Sample message for keylen=blocklen
+Key = 000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F
+Msg = 53616D706C65206D65737361676520666F72206B65796C656E3D626C6F636B6C656E
+MD = 5FD596EE78D5553C8FF4E72D266DFD192366DA29
+
+Len = 272
+Name = Sample message for keylen<blocklen
+Key = 000102030405060708090A0B0C0D0E0F10111213
+Msg = 53616D706C65206D65737361676520666F72206B65796C656E3C626C6F636B6C656E
+MD = 4C99FF0CB1B31BD33F8431DBAF4D17FCD356A807
+
+Len = 272
+Key = 000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F404142434445464748494A4B4C4D4E4F505152535455565758595A5B5C5D5E5F60616263
+Msg = 53616D706C65206D65737361676520666F72206B65796C656E3D626C6F636B6C656E
+MD = 2D51B2F7750E410584662E38F133435F4C4FD42A
+
+Len = 64
+Key = 0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b
+# "Hi There"
+Msg = 4869205468657265
+MD = b617318655057264e28bc0b6fb378c8ef146be00
+
+Len = 224
+# "Jefe"
+Key = 4a656665
+# "what do ya want for nothing?"
+Msg = 7768617420646f2079612077616e7420666f72206e6f7468696e673f
+MD = effcdf6ae5eb2fa2d27416d5f184df9c259a7c79
+
+Len = 400
+Key = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Msg = dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+MD = 125d7342b9ac11cd91a39af48aa17b4f63f175d3
+
+Len = 400
+Key = 0102030405060708090a0b0c0d0e0f10111213141516171819
+Msg = cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd
+MD = 4c9007f4026250c6bc8414f9bf50c86c2d7235da
+
+Len = 160
+Key = 0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c
+# Note: We test the full MD rather than the truncated one in this test
+# "Test With Truncation"
+Msg = 546573742057697468205472756e636174696f6e
+MD = 4c1a03424b55e07fe7f27be1d58bb9324a9a5a04
+
+Len = 432
+Key = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+# "Test Using Larger Than Block-Size Key - Hash Key First"
+Msg = 54657374205573696e67204c6172676572205468616e20426c6f636b2d53697a65204b6579202d2048617368204b6579204669727374
+MD = aa4ae5e15272d00e95705637ce8a3b55ed402112
+
+Len = 584
+Key = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+# "Test Using Larger Than Block-Size Key and Larger Than One Block-Size Data"
+Msg = 54657374205573696e67204c6172676572205468616e20426c6f636b2d53697a65204b657920616e64204c6172676572205468616e204f6e6520426c6f636b2d53697a652044617461
+MD = e8e99d0f45237d786d6bbaa7965c7808bbff1a91
