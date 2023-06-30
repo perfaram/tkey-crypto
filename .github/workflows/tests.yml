@@ -1,0 +1,33 @@
+name: 'tests'
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/nowitis/tkey-deviceapp-builder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+          path: main
+
+      - name: Checkout tkey-libs repo
+        uses: actions/checkout@v3
+        with:
+          repository: tillitis/tkey-libs
+          path: tkey-libs
+
+      - name: Build tkey-libs
+        run: make -C tkey-libs all
+
+      - name: Build tkey-crypto
+        run: make -C main all
+
+      - name: Test (build and test)
+        run: make -C main/tests do-test
