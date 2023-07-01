@@ -4,7 +4,7 @@ on:
   push:
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/nowitis/tkey-deviceapp-builder
@@ -13,11 +13,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          submodules: 'true'
           path: main
 
-      - name: Build tkey-crypto
-        run: make -C main all
+      - name: Check code formatting
+        run: make -C main checkfmt
 
-      - name: Test (build and test)
-        run: make -C main/tests do-test
+      - name: Run clang linter
+        run: make -C main checklint

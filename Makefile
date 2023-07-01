@@ -72,8 +72,8 @@ checkfmt:
 
 # Uses ../.clang-tidy
 .PHONY: lint
-lint:
+checklint:
 	clang-tidy $(FMTFILES) -- $(CINCLUDES)
 .PHONY: lintfix
-lintfix:
+lint:
 	clang-tidy -fix-errors $(FMTFILES) -- $(CINCLUDES)
