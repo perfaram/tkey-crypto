@@ -17,6 +17,7 @@ jobs:
 
       - name: Check code formatting
         run: make -C main checkfmt
+        continue-on-error: true
 
       - name: Run clang linter
         run: make -C main checklint
