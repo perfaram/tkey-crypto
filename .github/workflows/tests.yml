@@ -30,4 +30,13 @@ jobs:
         run: make -C main all
 
       - name: Test (build and test)
-        run: make -C main/tests do-test
+        run: make -C main/tests run-test
+
+      - name: Compute coverage
+        run: make -C main/tests coverage
+
+      - name: Store code coverage information
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-${{ github.sha }}
+          path: main/tests/coverage.lcov
