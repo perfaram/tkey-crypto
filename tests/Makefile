@@ -26,9 +26,9 @@ do-test: test
 .PHONY: coverage
 coverage:
 	make all CFLAGS_ADD="-fprofile-instr-generate -fcoverage-mapping"
-	./t_hmac_sha1
+	./test
 	llvm-profdata merge default.profraw -o all.profdata
-	llvm-cov show -instr-profile=all.profdata "./t_hmac_sha1" "../libsha/hmac_sha1.c"
+	llvm-cov show -instr-profile=all.profdata "./test" "../libsha"
 
 .PHONY: clean
 clean:
