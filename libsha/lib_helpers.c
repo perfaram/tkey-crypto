@@ -29,6 +29,7 @@
  */
 
 #include "lib_helpers.h"
+#include <tklib/limits.h>
 
 // LCOV_EXCL_START
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
