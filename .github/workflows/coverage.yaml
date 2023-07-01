@@ -12,8 +12,6 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/nowitis/tkey-deviceapp-builder
 
     steps:
       - name: Checkout gh-pages
@@ -22,11 +20,16 @@ jobs:
           ref: gh-pages
           path: gh-pages
 
-      - uses: actions/download-artifact@v3
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
         with:
+          workflow: tests.yml
+          workflow_conclusion: success
           name: coverage-${{ github.sha }}
-          path: ./coverage.lcov
+          path: .
 
+      - uses: actions/setup-node@v3
+      
       - name: Create badge
         shell: bash
         run: |
@@ -37,6 +40,7 @@ jobs:
       - name: Deploy gh-pages (with new badge)
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
+          repository: gh-pages
           commit_message: "Update badges [skip ci]"
           skip_fetch: true
           skip_checkout: true
