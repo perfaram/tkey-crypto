@@ -34,87 +34,10 @@
 #else
 #include <string.h>
 #endif
-#include <errno_compat.h>
 #include <sha1.h>
 
-#define CRYB_ROR(N)                                                            \
-	static inline uint##N##_t ror##N(uint##N##_t i, int n)                 \
-	{                                                                      \
-		return (i << (-n & ((N)-1)) | i >> (n & ((N)-1)));             \
-	}
-
-#define CRYB_ROL(N)                                                            \
-	static inline uint##N##_t rol##N(uint##N##_t i, int n)                 \
-	{                                                                      \
-		return (i << (n & ((N)-1)) | i >> (-n & ((N)-1)));             \
-	}
-
-CRYB_ROL(32);
-
-static inline uint32_t be32dec(const void *p)
-{
-	return ((uint32_t)((const uint8_t *)p)[3] |
-		(uint32_t)((const uint8_t *)p)[2] << 8 |
-		(uint32_t)((const uint8_t *)p)[1] << 16 |
-		(uint32_t)((const uint8_t *)p)[0] << 24);
-}
-
-static inline void be32decv(uint32_t *u32, const void *p, size_t n)
-{
-	for (const uint8_t *u8 = p; n--; u8 += sizeof *u32, u32++)
-		*u32 = be32dec(u8);
-}
-
-static inline void be32enc(void *p, uint32_t u32)
-{
-	((uint8_t *)p)[3] = u32 & 0xff;
-	((uint8_t *)p)[2] = (u32 >> 8) & 0xff;
-	((uint8_t *)p)[1] = (u32 >> 16) & 0xff;
-	((uint8_t *)p)[0] = (u32 >> 24) & 0xff;
-}
-
-static inline void be32encv(void *p, const uint32_t *u32, size_t n)
-{
-	for (uint8_t *u8 = p; n--; u8 += sizeof *u32, u32++)
-		be32enc(u8, *u32);
-}
-
-static inline void be64enc(void *p, uint64_t u64)
-{
-	((uint8_t *)p)[7] = u64 & 0xff;
-	((uint8_t *)p)[6] = (u64 >> 8) & 0xff;
-	((uint8_t *)p)[5] = (u64 >> 16) & 0xff;
-	((uint8_t *)p)[4] = (u64 >> 24) & 0xff;
-	((uint8_t *)p)[3] = (u64 >> 32) & 0xff;
-	((uint8_t *)p)[2] = (u64 >> 40) & 0xff;
-	((uint8_t *)p)[1] = (u64 >> 48) & 0xff;
-	((uint8_t *)p)[0] = (u64 >> 56) & 0xff;
-}
-
-/*
- * Like memset(), but checks for overflow and guarantees that the buffer
- * is overwritten even if the data will never be read.
- *
- * ISO/IEC 9899:2011 K.3.7.4.1
- */
-errno_t memset_s(void *d, size_t dsz, int c, size_t n)
-{
-	volatile uint8_t *D;
-	unsigned int i;
-	uint8_t C;
-
-	if (d == NULL)
-		return (EINVAL);
-
-	if (dsz > SIZE_MAX || n > SIZE_MAX)
-		return (ERANGE);
-
-	for (D = d, C = (uint8_t)c, i = 0; i < n && i < dsz; ++i)
-		D[i] = C;
-	if (n > dsz)
-		return (EOVERFLOW);
-	return (0);
-}
+#include "cryb_helpers.h"
+#include "lib_helpers.h"
 
 static uint32_t sha1_h[5] = {
     0x67452301U, 0xefcdab89U, 0x98badcfeU, 0x10325476U, 0xc3d2e1f0U,

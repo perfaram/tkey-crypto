@@ -48,7 +48,7 @@ libarithmetic/libarithmetic.a: $(ARITHMOBJS)
 $(ARITHMOBJS): $(TKLIB_INCLUDE)/types.h
 
 # OATH lib
-SHAOBJS=libsha/sha1.o libsha/hmac_sha1.o
+SHAOBJS=libsha/lib_helpers.o libsha/sha1.o libsha/hmac_sha1.o
 libsha/libsha.a: $(SHAOBJS)
 	llvm-ar -qc $@ $(SHAOBJS)
 $(SHAOBJS): $(TKLIB_INCLUDE)/types.h $(TKLIB_INCLUDE)/lib.h include/sha1.h include/hmac_sha1.h
@@ -61,7 +61,7 @@ clean:
 	rm -f $(CRYPTOLIBS) $(CRYPTOLIBOBJS)
 
 # Uses ../.clang-format
-FMTFILES=include/*.h libsha/*.c
+FMTFILES=include/*.h libsha/*.c libsha/*.h
 .PHONY: fmt
 fmt:
 	clang-format --dry-run --ferror-limit=0 $(FMTFILES)
